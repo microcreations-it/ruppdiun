@@ -18,13 +18,16 @@ export default function GestionaleRistorante() {
   
   // Stati per il Gestore
   const [selectedTableForPayment, setSelectedTableForPayment] = useState(null);
-  const [newDish, setNewDish] = useState({ name: '', price: '', category: 'Antipasti', notes: '', allergens: '' });
+  const [newDish, setNewDish] = useState({ name: '', price: '', category: 'Coperti', notes: '', allergens: '' });
   const [showArchive, setShowArchive] = useState(false);
   
   // Stati per il Cameriere
   const [selectedTable, setSelectedTable] = useState(null);
   const [currentOrderItems, setCurrentOrderItems] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
+
+  // Categorie menu
+  const MENU_CATEGORIES = ['Coperti', 'Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dessert', 'Bibite', 'Birre', 'Vini', 'Bar'];
 
   // Carica dati dal database
   useEffect(() => {
@@ -91,7 +94,7 @@ export default function GestionaleRistorante() {
       }];
       setMenu(newMenu);
       await saveData(newMenu, kitchenOrders, barOrders, archivedOrders);
-      setNewDish({ name: '', price: '', category: 'Antipasti', notes: '', allergens: '' });
+      setNewDish({ name: '', price: '', category: 'Coperti', notes: '', allergens: '' });
     }
   };
 
@@ -149,15 +152,15 @@ export default function GestionaleRistorante() {
       const orderId = Date.now().toString();
       const total = currentOrderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-      // Separa ordini cucina e bar
+      // Separa ordini cucina e bar (Bibite, Birre, Vini, Bar vanno al bar)
       const kitchenItems = currentOrderItems.filter(item => {
         const dish = menu.find(d => d.id === item.dishId);
-        return dish && dish.category !== 'Bevande';
+        return dish && !['Bibite', 'Birre', 'Vini', 'Bar'].includes(dish.category);
       });
       
       const barItems = currentOrderItems.filter(item => {
         const dish = menu.find(d => d.id === item.dishId);
-        return dish && dish.category === 'Bevande';
+        return dish && ['Bibite', 'Birre', 'Vini', 'Bar'].includes(dish.category);
       });
 
       let newKitchenOrders = kitchenOrders;
@@ -427,10 +430,50 @@ export default function GestionaleRistorante() {
 
   const logout = () => {
     setRole(null);
+    setPassword('');
+    setLoginError('');
     setSelectedTable(null);
     setCurrentOrderItems([]);
     setShowMenu(false);
     setSelectedTableForPayment(null);
+  };
+
+  const handleLogin = (selectedRole) => {
+    const enteredPassword = prompt(`Inserisci la password per ${getRoleName(selectedRole)}:`);
+    
+    if (!enteredPassword) return;
+    
+    if (PASSWORDS[selectedRole] === enteredPassword) {
+      setRole(selectedRole);
+      setPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Password errata!');
+      setTimeout(() => setLoginError(''), 3000);
+    }
+  };
+
+  const getRoleName = (role) => {
+    const names = {
+      admin: 'Amministratore',
+      cucina: 'Cucina',
+      bar: 'Bar',
+      cameriere: 'Cameriere',
+      cameriere_bar: 'Cameriere + Bar',
+      menu: 'Gestione Menu'
+    };
+    return names[role] || role;
+  };
+
+  const clearArchive = async () => {
+    if (!confirm('Sei sicuro di voler cancellare tutto l\'archivio? Questa azione è irreversibile!')) return;
+    
+    const secondConfirm = prompt('Scrivi "CANCELLA" per confermare:');
+    if (secondConfirm !== 'CANCELLA') return;
+    
+    setArchivedOrders([]);
+    await saveData(menu, kitchenOrders, barOrders, []);
+    alert('Archivio cancellato con successo!');
   };
 
   if (loading) {
@@ -469,9 +512,137 @@ export default function GestionaleRistorante() {
   }
 
   // ========================================
-  // GESTORE
+  // GESTIONE MENU
   // ========================================
-  if (role === 'gestore') {
+  if (role === 'menu' || role === 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-purple-100 p-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-purple-900">📝 Gestione Menu</h1>
+            <button onClick={logout} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
+              <LogOut size={18} /> Esci
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form Aggiungi Piatto */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow-lg p-6 sticky top-4">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">Aggiungi Piatto</h2>
+                <div className="space-y-3">
+                  <input 
+                    type="text" 
+                    placeholder="Nome piatto" 
+                    value={newDish.name} 
+                    onChange={(e) => setNewDish({...newDish, name: e.target.value})} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm" 
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Prezzo (€)" 
+                    value={newDish.price} 
+                    onChange={(e) => setNewDish({...newDish, price: e.target.value})} 
+                    step="0.10" 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm" 
+                  />
+                  <select 
+                    value={newDish.category} 
+                    onChange={(e) => setNewDish({...newDish, category: e.target.value})} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  >
+                    {MENU_CATEGORIES.map(cat => (
+                      <option key={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <input 
+                    type="text" 
+                    placeholder="Note (es. senza glutine)" 
+                    value={newDish.notes} 
+                    onChange={(e) => setNewDish({...newDish, notes: e.target.value})} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm" 
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Allergeni (es. arachidi)" 
+                    value={newDish.allergens} 
+                    onChange={(e) => setNewDish({...newDish, allergens: e.target.value})} 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm" 
+                  />
+                  <button 
+                    onClick={addDish} 
+                    className="w-full bg-purple-500 text-white py-3 rounded-lg font-semibold hover:bg-purple-600 transition flex items-center justify-center gap-2"
+                  >
+                    <Plus size={20} /> Aggiungi
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista Menu */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">Menu Completo ({menu.length} piatti)</h2>
+                {menu.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Nessun piatto nel menu</p>
+                ) : (
+                  <div className="space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+                    {MENU_CATEGORIES.map(cat => {
+                      const items = menu.filter(d => d.category === cat);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <h3 className="font-bold text-gray-800 text-lg mb-3 border-b-2 border-purple-200 pb-2">{cat}</h3>
+                          <div className="grid gap-3">
+                            {items.map(dish => (
+                              <div key={dish.id} className={`p-3 rounded-lg border-2 ${hiddenDishes.includes(dish.id) ? 'bg-gray-100 border-gray-300 opacity-60' : 'bg-white border-gray-200'}`}>
+                                <div className="flex justify-between items-start gap-3">
+                                  <div className="flex-1">
+                                    <p className={`font-semibold text-base ${hiddenDishes.includes(dish.id) ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                      {dish.name}
+                                    </p>
+                                    <p className="text-green-600 font-bold text-base mt-1">€ {dish.price.toFixed(2)}</p>
+                                    {dish.notes && <p className="text-xs text-blue-600 mt-1">ℹ️ {dish.notes}</p>}
+                                    {dish.allergens && <p className="text-xs text-red-600 mt-1">⚠️ {dish.allergens}</p>}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => toggleHideDish(dish.id)} 
+                                      className={`px-3 py-2 text-sm rounded font-bold transition ${hiddenDishes.includes(dish.id) ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-400 text-white hover:bg-gray-500'}`}
+                                      title={hiddenDishes.includes(dish.id) ? 'Rendi visibile' : 'Nascondi'}
+                                    >
+                                      {hiddenDishes.includes(dish.id) ? '👁️' : '🚫'}
+                                    </button>
+                                    <button 
+                                      onClick={() => removeDish(dish.id)} 
+                                      className="px-3 py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition"
+                                      title="Elimina piatto"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ========================================
+  // GESTORE (SENZA MENU)
+  // ========================================
+  if (role === 'gestore' || role === 'admin') {
     const tableOrders = selectedTableForPayment ? getTableAllOrders(selectedTableForPayment) : [];
     const totalAmount = selectedTableForPayment ? calculateTableTotal(selectedTableForPayment) : 0;
 
@@ -497,7 +668,17 @@ export default function GestionaleRistorante() {
           {/* Archivio Ordini Pagati */}
           {showArchive && (
             <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">📦 Archivio Ordini Pagati</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-800">📦 Archivio Ordini Pagati</h2>
+                {archivedOrders.length > 0 && (
+                  <button
+                    onClick={clearArchive}
+                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition text-sm font-semibold"
+                  >
+                    🗑️ Cancella Archivio
+                  </button>
+                )}
+              </div>
               {archivedOrders.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">Nessun ordine nell'archivio</p>
               ) : (
@@ -536,114 +717,9 @@ export default function GestionaleRistorante() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Sezione Menu */}
-            <div className="lg:col-span-1">
-              {/* Form Aggiungi Piatto */}
-              <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Aggiungi Piatto</h2>
-                <div className="space-y-3">
-                  <input 
-                    type="text" 
-                    placeholder="Nome piatto" 
-                    value={newDish.name} 
-                    onChange={(e) => setNewDish({...newDish, name: e.target.value})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="Prezzo (€)" 
-                    value={newDish.price} 
-                    onChange={(e) => setNewDish({...newDish, price: e.target.value})} 
-                    step="0.10" 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  />
-                  <select 
-                    value={newDish.category} 
-                    onChange={(e) => setNewDish({...newDish, category: e.target.value})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  >
-                    <option>Antipasti</option>
-                    <option>Primi</option>
-                    <option>Secondi</option>
-                    <option>Contorni</option>
-                    <option>Dessert</option>
-                    <option>Bevande</option>
-                  </select>
-                  <input 
-                    type="text" 
-                    placeholder="Note (es. senza glutine)" 
-                    value={newDish.notes} 
-                    onChange={(e) => setNewDish({...newDish, notes: e.target.value})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Allergeni (es. arachidi)" 
-                    value={newDish.allergens} 
-                    onChange={(e) => setNewDish({...newDish, allergens: e.target.value})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  />
-                  <button 
-                    onClick={addDish} 
-                    className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
-                  >
-                    <Plus size={20} /> Aggiungi
-                  </button>
-                </div>
-              </div>
-
-              {/* Lista Menu */}
-              <div className="bg-white rounded-lg shadow-lg p-6 max-h-96 overflow-y-auto">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Menu ({menu.length})</h2>
-                {menu.length === 0 ? (
-                  <p className="text-gray-500 text-sm">Nessun piatto</p>
-                ) : (
-                  <div className="space-y-4">
-                    {['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dessert', 'Bevande'].map(cat => {
-                      const items = menu.filter(d => d.category === cat);
-                      if (items.length === 0) return null;
-                      return (
-                        <div key={cat}>
-                          <h3 className="font-bold text-gray-700 text-sm mb-2 border-b-2 pb-1">{cat}</h3>
-                          {items.map(dish => (
-                            <div key={dish.id} className={`p-2 mb-2 rounded ${hiddenDishes.includes(dish.id) ? 'bg-gray-200 opacity-50' : 'bg-gray-50'}`}>
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1">
-                                  <p className={`font-semibold text-sm ${hiddenDishes.includes(dish.id) ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                                    {dish.name}
-                                  </p>
-                                  <p className="text-green-600 font-bold text-sm">€{dish.price.toFixed(2)}</p>
-                                  {dish.notes && <p className="text-xs text-blue-600 mt-1">ℹ️ {dish.notes}</p>}
-                                  {dish.allergens && <p className="text-xs text-red-600 mt-1">⚠️ {dish.allergens}</p>}
-                                </div>
-                                <div className="flex gap-1">
-                                  <button 
-                                    onClick={() => toggleHideDish(dish.id)} 
-                                    className={`px-2 py-1 text-xs rounded font-bold ${hiddenDishes.includes(dish.id) ? 'bg-yellow-500 text-white' : 'bg-gray-400 text-white'}`}
-                                  >
-                                    {hiddenDishes.includes(dish.id) ? '👁️' : '🚫'}
-                                  </button>
-                                  <button 
-                                    onClick={() => removeDish(dish.id)} 
-                                    className="px-2 py-1 bg-red-500 text-white text-xs rounded"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 gap-6">
             {/* Sezione Tavoli e Pagamenti */}
-            <div className="lg:col-span-2">
+            <div>
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <h2 className="text-xl font-semibold text-gray-800 mb-4">Tavoli - Gestione Pagamenti</h2>
                 
@@ -754,7 +830,7 @@ export default function GestionaleRistorante() {
   // ========================================
   // CAMERIERE
   // ========================================
-  if (role === 'cameriere') {
+  if (role === 'cameriere' || role === 'cameriere_bar' || role === 'admin') {
     const visibleMenu = menu.filter(d => !hiddenDishes.includes(d.id));
     
     return (
@@ -845,15 +921,19 @@ export default function GestionaleRistorante() {
                       <p className="text-gray-500">Nessun piatto disponibile</p>
                     ) : (
                       <div className="space-y-4">
-                        {['Antipasti', 'Primi', 'Secondi', 'Contorni', 'Dessert', 'Bevande'].map(category => {
+                        {MENU_CATEGORIES.map(category => {
                           const dishesInCategory = visibleMenu.filter(d => d.category === category);
                           const categoryColors = {
+                            'Coperti': 'border-gray-500 bg-gray-50',
                             'Antipasti': 'border-purple-500 bg-purple-50',
                             'Primi': 'border-blue-500 bg-blue-50',
                             'Secondi': 'border-amber-500 bg-amber-50',
                             'Contorni': 'border-green-500 bg-green-50',
                             'Dessert': 'border-pink-500 bg-pink-50',
-                            'Bevande': 'border-cyan-500 bg-cyan-50'
+                            'Bibite': 'border-cyan-500 bg-cyan-50',
+                            'Birre': 'border-yellow-500 bg-yellow-50',
+                            'Vini': 'border-red-500 bg-red-50',
+                            'Bar': 'border-indigo-500 bg-indigo-50'
                           };
                           if (dishesInCategory.length === 0) return null;
                           return (
@@ -1068,7 +1148,7 @@ export default function GestionaleRistorante() {
   // ========================================
   // CUCINA
   // ========================================
-  if (role === 'cucina') {
+  if (role === 'cucina' || role === 'admin') {
     // Ordina gli ordini dal più recente al meno recente
     const sortedKitchenOrders = [...kitchenOrders].sort((a, b) => {
       return b.id.localeCompare(a.id);
@@ -1175,7 +1255,7 @@ export default function GestionaleRistorante() {
   // ========================================
   // BAR
   // ========================================
-  if (role === 'bar') {
+  if (role === 'bar' || role === 'cameriere_bar' || role === 'admin') {
     // Ordina gli ordini dal più recente al meno recente
     const sortedBarOrders = [...barOrders].sort((a, b) => {
       return b.id.localeCompare(a.id);
@@ -1278,37 +1358,94 @@ export default function GestionaleRistorante() {
   // ========================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-        <h1 className="text-4xl font-bold text-center text-gray-800 mb-8">🍽️ Gestionale Ristorante</h1>
+      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full">
+        <h1 className="text-4xl font-bold text-center text-gray-800 mb-2">🍽️ Ruppdiun</h1>
+        <p className="text-center text-gray-600 mb-8">Gestionale Ristorante</p>
         
-        <div className="space-y-4">
+        {loginError && (
+          <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-3 rounded mb-6 text-center font-semibold">
+            {loginError}
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Accesso Amministratore */}
           <button 
-            onClick={() => setRole('gestore')} 
-            className="w-full bg-blue-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-600 transition"
+            onClick={() => handleLogin('admin')} 
+            className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-purple-600 hover:to-purple-700 transition shadow-lg"
           >
-            📋 Gestore
+            <div className="text-3xl mb-2">👑</div>
+            <div>Amministratore</div>
+            <div className="text-xs opacity-80 mt-1">Accesso Completo</div>
           </button>
+
+          {/* Gestione Menu */}
           <button 
-            onClick={() => setRole('cameriere')} 
-            className="w-full bg-orange-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-orange-600 transition"
+            onClick={() => handleLogin('menu')} 
+            className="bg-gradient-to-r from-purple-400 to-pink-500 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-purple-500 hover:to-pink-600 transition shadow-lg"
           >
-            🍽️ Cameriere
+            <div className="text-3xl mb-2">📝</div>
+            <div>Gestione Menu</div>
+            <div className="text-xs opacity-80 mt-1">Solo Menu</div>
           </button>
+
+          {/* Cameriere */}
           <button 
-            onClick={() => setRole('cucina')} 
-            className="w-full bg-red-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-600 transition"
+            onClick={() => handleLogin('cameriere')} 
+            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-orange-600 hover:to-orange-700 transition shadow-lg"
           >
-            👨‍🍳 Cucina
+            <div className="text-3xl mb-2">🍽️</div>
+            <div>Cameriere</div>
+            <div className="text-xs opacity-80 mt-1">Gestione Tavoli</div>
           </button>
+
+          {/* Cameriere + Bar */}
           <button 
-            onClick={() => setRole('bar')} 
-            className="w-full bg-cyan-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-cyan-600 transition"
+            onClick={() => handleLogin('cameriere_bar')} 
+            className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-teal-600 hover:to-cyan-700 transition shadow-lg"
           >
-            🍹 Bar
+            <div className="text-3xl mb-2">🍹🍽️</div>
+            <div>Cameriere + Bar</div>
+            <div className="text-xs opacity-80 mt-1">Tavoli + Bevande</div>
+          </button>
+
+          {/* Cucina */}
+          <button 
+            onClick={() => handleLogin('cucina')} 
+            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-red-600 hover:to-red-700 transition shadow-lg"
+          >
+            <div className="text-3xl mb-2">👨‍🍳</div>
+            <div>Cucina</div>
+            <div className="text-xs opacity-80 mt-1">Preparazione Piatti</div>
+          </button>
+
+          {/* Bar */}
+          <button 
+            onClick={() => handleLogin('bar')} 
+            className="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-cyan-600 hover:to-cyan-700 transition shadow-lg"
+          >
+            <div className="text-3xl mb-2">🍹</div>
+            <div>Bar</div>
+            <div className="text-xs opacity-80 mt-1">Preparazione Bevande</div>
           </button>
         </div>
 
-        <p className="text-center text-gray-500 text-sm mt-8">Seleziona il tuo ruolo per accedere</p>
+        <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600 text-center mb-2">
+            <strong>Password di default:</strong>
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+            <div>• Admin: <code className="bg-gray-200 px-2 py-1 rounded">1234</code></div>
+            <div>• Menu: <code className="bg-gray-200 px-2 py-1 rounded">menu123</code></div>
+            <div>• Cameriere: <code className="bg-gray-200 px-2 py-1 rounded">cameriere123</code></div>
+            <div>• Cam+Bar: <code className="bg-gray-200 px-2 py-1 rounded">cambar123</code></div>
+            <div>• Cucina: <code className="bg-gray-200 px-2 py-1 rounded">cucina123</code></div>
+            <div>• Bar: <code className="bg-gray-200 px-2 py-1 rounded">bar123</code></div>
+          </div>
+          <p className="text-xs text-gray-500 text-center mt-2 italic">
+            Le password possono essere modificate nel codice
+          </p>
+        </div>
       </div>
     </div>
   );
